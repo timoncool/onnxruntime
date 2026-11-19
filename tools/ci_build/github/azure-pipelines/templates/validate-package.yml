@@ -1,0 +1,23 @@
+parameters:
+  PlatformsSupported: ''
+  VerifyNugetSigning: ''
+  PackageType: ''
+  PackageName: ''
+  PackagePath: ''
+  IsReleaseBuild: false
+  ScriptPath: '$(Build.SourcesDirectory)/tools/nuget/validate_package.py'
+  workingDirectory: "$(Build.BinariesDirectory)"
+
+steps:
+    # PythonScript below needs a version of python to use as its interpreter
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.12'
+        addToPath: true
+
+    - task: PythonScript@0
+      displayName: 'Validate Package'
+      inputs:
+        scriptPath: '${{parameters.ScriptPath}}'
+        arguments: '--package_type ${{parameters.PackageType}} --package_name ${{parameters.PackageName}} --package_path ${{parameters.PackagePath}} --platforms_supported ${{parameters.PlatformsSupported}} --verify_nuget_signing ${{parameters.VerifyNugetSigning}} --is_release_build ${{parameters.IsReleaseBuild}}'
+        workingDirectory: ${{parameters.workingDirectory}}
