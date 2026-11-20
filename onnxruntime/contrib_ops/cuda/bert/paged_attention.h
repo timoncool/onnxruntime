@@ -4,7 +4,6 @@
 #pragma once
 
 #include <atomic>
-#include <memory>
 #include "core/providers/cuda/cuda_kernel.h"
 #include "contrib_ops/cuda/bert/paged_attention_impl.h"
 #include "contrib_ops/cuda/bert/attention_kernel_options.h"
@@ -64,6 +63,7 @@ class PagedAttention final : public CudaKernel {
   // for every cuDNN attention path in the CUDA EP.
   bool enable_cudnn_paged_;
   bool auto_enable_cudnn_paged_;
+  bool skip_input_sanitizer_;
   // -1 = not yet resolved, 0 = the kernel needs more shared memory than this device allows,
   // 1 = it fits. Resolved once per node because it only depends on head_size / group size.
   mutable std::atomic<int> xqa_shared_memory_ok_{-1};

@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifndef SHARED_PROVIDER
@@ -58,6 +60,8 @@ inline constexpr std::array<uint8_t, ONNX_NAMESPACE::TensorProto_DataType_DataTy
         sizeof(uint8_t),   // FLOAT8E8M0
         sizeof(uint8_t),   // UINT2
         sizeof(uint8_t),   // INT2
+        sizeof(uint8_t),   // FLOAT6E2M3: packed 6-bit elements
+        sizeof(uint8_t),   // FLOAT6E3M2: packed 6-bit elements
     };
 
 consteval bool IsTensorProtoDataTypeElementSizeMapComplete() {
@@ -306,6 +310,19 @@ This marker is used when data is in native endian format, i.e. big endian on big
 */
 constexpr const ORTCHAR_T* kTensorProtoNativeEndianMemoryAddressTag = ORT_TSTR("*/_ORT_NATIVE_ENDIAN_MEM_ADDR_/*");
 
+struct ExternalDataFileCache {
+#if !defined(ORT_MINIMAL_BUILD)
+  struct Entry {
+    std::shared_ptr<RandomAccessFile> file;
+    uint64_t file_length{0};
+  };
+  PathString cached_model_dir;
+  bool model_dir_initialized{false};
+  std::unordered_set<PathString> validated_rel_paths;
+  std::unordered_map<PathString, Entry> files;
+#endif
+};
+
 /// <summary>
 /// Creates a OrtValue with a tensor on top of the external data.
 /// If tensor_proto points to a memory address, the OrtValue will be created with a tensor
@@ -316,21 +333,33 @@ constexpr const ORTCHAR_T* kTensorProtoNativeEndianMemoryAddressTag = ORT_TSTR("
 /// <param name="tensor_proto">tensor proto containing external data</param>
 /// <param name="ort_value">output ort value</param>
 /// <param name="prepacked_info">optional pre-packed weight data output container</param>
+/// <param name="file_cache">optional session-scoped cache of validated external data files</param>
 /// <returns>Status</returns>
 common::Status GetExtDataFromTensorProto(const Env& env, const std::filesystem::path& model_path,
                                          const ONNX_NAMESPACE::TensorProto& tensor_proto,
-                                         OrtValue& ort_value, PrepackedWeightsForGraph* prepacked_info = nullptr);
+                                         OrtValue& ort_value, PrepackedWeightsForGraph* prepacked_info = nullptr,
+                                         ExternalDataFileCache* file_cache = nullptr);
 
 // Given a tensor proto with external data obtain a tensor using the specified custom external data loader.
 common::Status LoadExtDataToTensorFromTensorProto(const Env& env, const std::filesystem::path& model_path,
                                                   const ONNX_NAMESPACE::TensorProto& tensor_proto,
                                                   const IExternalDataLoader& ext_data_loader,
-                                                  Tensor& tensor);
+                                                  const AllocatorPtr& allocator,
+                                                  Tensor& tensor,
+                                                  PrepackedWeightsForGraph* prepacked_info = nullptr,
+                                                  ExternalDataFileCache* file_cache = nullptr);
 
 // Load any saved pre-packed blobs referenced by an external TensorProto without loading its tensor data.
 common::Status LoadPrepackedWeightsFromExternalData(const Env& env, const std::filesystem::path& model_path,
                                                     const ONNX_NAMESPACE::TensorProto& tensor_proto,
                                                     PrepackedWeightsForGraph& prepacked_info);
+
+#if defined(ENABLE_D3D12_FILE_LOADING)
+common::Status RegisterExternalDataLoadCandidateFromTensorProto(
+    const Env& env, const std::filesystem::path& model_path,
+    const ONNX_NAMESPACE::TensorProto& tensor_proto,
+    const IExternalDataLoader& ext_data_loader);
+#endif
 
 // Convert the AttributeProto from a Constant node into a TensorProto that can be used as an initializer
 // If AttributeProto contains a TensorProto, this tensor proto is converted as is including the case when the
@@ -655,7 +684,9 @@ Status TensorProtoWithExternalDataToTensorProto(
 /// must be contained under `kOrtSessionOptionsModelExternalInitializersFileFolderPath`.
 ///
 /// If the model itself is a symlink, this function checks against both the directory containing the symlink
-/// and the real/canonical directory of the model after resolving all symlinks.
+/// and the real/canonical directory of the model after resolving all symlinks. In non-minimal builds, if the
+/// symlinked model is in a Hugging Face Hub cache snapshot, external data contained within the model directory
+/// that resolves into the cache's repo-local or shared blob stores is also accepted.
 ///
 /// On WASM builds, this function skips most validation (except checks for non-empty/non-absolute path) if we are
 /// unable to query the current working directory, as this indicates that the WASM environment does not have

@@ -77,6 +77,7 @@ void ParseExecutionProviders(const Napi::Array epList, Ort::SessionOptions& sess
           std::string value;
           if (name == "preferredLayout" ||
               name == "validationMode" ||
+              name == "weightLoadAcceleration" ||
               name == "storageBufferCacheMode" ||
               name == "uniformBufferCacheMode" ||
               name == "queryResolveBufferCacheMode" ||
@@ -104,6 +105,23 @@ void ParseExecutionProviders(const Napi::Array epList, Ort::SessionOptions& sess
                 value += '\n';
               }
               value += v.As<Napi::String>().Utf8Value();
+            }
+          } else if (name == "enableFeatures" || name == "disableFeatures") {
+            ORT_NAPI_THROW_TYPEERROR_IF(!valueVar.IsArray(), epList.Env(),
+                                        "Invalid argument: \"", name, "\" must be a string array.");
+            auto arr = valueVar.As<Napi::Array>();
+            for (uint32_t i = 0; i < arr.Length(); i++) {
+              Napi::Value v = arr[i];
+              ORT_NAPI_THROW_TYPEERROR_IF(!v.IsString(), epList.Env(),
+                                          "Invalid argument: elements of \"", name, "\" must be strings.");
+              const auto feature = v.As<Napi::String>().Utf8Value();
+              ORT_NAPI_THROW_TYPEERROR_IF(feature.empty() || feature.find_first_of(",\0", 0, 2) != std::string::npos,
+                                          epList.Env(),
+                                          "Invalid argument: \"", name, "\" has an invalid feature name.");
+              if (i > 0) {
+                value += ',';
+              }
+              value += feature;
             }
           } else {
             // unrecognized option

@@ -1253,8 +1253,8 @@ ORT_API_STATUS_IMPL(SessionOptionsGetWeightlessSourceModelBuffer, _In_ const Ort
                     _Outptr_result_maybenull_ const void** source_model_data,
                     _Out_ size_t* source_model_data_length) {
   API_IMPL_BEGIN
-  *source_model_data = session_options->weightless_source_model_data;
-  *source_model_data_length = session_options->weightless_source_model_data_size;
+  *source_model_data = session_options->value.weightless_source_model_data;
+  *source_model_data_length = session_options->value.weightless_source_model_data_size;
   return nullptr;
   API_IMPL_END
 }
@@ -1369,7 +1369,7 @@ static_assert(offsetof(OrtEpApi, SessionOptionsGetWeightlessSourceModelBuffer) /
               "Size of version 29 API cannot change");
 
 // So that nobody forgets to finish an API version, this check will serve as a reminder:
-static_assert(std::string_view(ORT_VERSION) == "1.31.1",
+static_assert(std::string_view(ORT_VERSION) == "1.32.0",
               "ORT_Version change detected, please follow below steps to ensure OrtEpApi is updated properly");
 
 }  // namespace OrtExecutionProviderApi
