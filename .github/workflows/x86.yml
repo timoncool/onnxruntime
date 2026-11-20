@@ -1,0 +1,30 @@
+name: CPU compatibility
+on: [push]
+jobs:
+  matmul:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["1.31.1", "1.32.0"]
+        cpu: [native, Nehalem, SandyBridge]
+    env:
+      VERSION: ${{ matrix.version }}
+      CPU: ${{ matrix.cpu }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends qemu-user
+          root="onnxruntime-linux-x64-$VERSION"
+          if [[ $VERSION == 1.31.1 ]]; then
+            url="https://github.com/timoncool/onnxruntime/releases/download/v$VERSION/$root.tgz"
+            sha=c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9
+          else
+            url="https://dl.photoprism.app/onnx/runtime/v$VERSION/$root.tgz"
+            sha=bb169b7e374731730d2ae406fb39de7be4b315f413a9132efe896261c31bb503
+          fi
+          curl --retry 3 -fsSL "$url" -o runtime.tgz
+          echo "$sha  runtime.tgz" | sha256sum -c
+          tar -xzf runtime.tgz
+          g++ -std=c++17 -march=x86-64 -I"$root/include" check.cpp -L"$root/lib" -Wl,-rpath,"$PWD/$root/lib" -lonnxruntime -o check
+          if [[ $CPU == native ]]; then ./check "$VERSION"; else qemu-x86_64 -cpu "$CPU" ./check "$VERSION"; fi
