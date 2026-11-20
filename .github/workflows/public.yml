@@ -1,0 +1,20 @@
+name: Check public CPU release archives
+on:
+  push:
+    branches: [qa/public-release-1.32]
+permissions: {}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch without credentials and check every byte
+        run: |
+          set -euo pipefail
+          base='https://github.com/timoncool/onnxruntime/releases/download/v1.32.0'
+          curl -fsSL --retry 3 "$base/SHA256SUMS.txt" -o SHA256SUMS.txt
+          echo "6637ec94eafd215545142bb87c956589172cb58d6cffe1b1db9e776953c31a3b  SHA256SUMS.txt" | sha256sum -c -
+          for name in onnxruntime-win-x64-1.32.0.zip onnxruntime-linux-x64-1.32.0.tgz onnxruntime-osx-arm64-ventura-1.32.0.tgz; do
+            curl -fsSL --retry 3 "$base/$name" -o "$name"
+          done
+          sha256sum -c SHA256SUMS.txt
+          wc -c SHA256SUMS.txt onnxruntime-*
